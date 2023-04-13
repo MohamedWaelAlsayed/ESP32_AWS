@@ -3,7 +3,7 @@
 #define SECRET
 #define THINGNAME "ESP32_Farm1"                         //change this
  
-const char WIFI_SSID[] = "Wael F3";               //change this
+const char WIFI_SSID[] = "Mohamed Wael";               //change this
 const char WIFI_PASSWORD[] = "Hazo123@";           //change this
 const char AWS_IOT_ENDPOINT[] = "ay9xjoglwbnv4-ats.iot.us-east-1.amazonaws.com";       //change this
  

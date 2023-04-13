@@ -1,14 +1,15 @@
 #include "secrets.h"
 #include <WiFiClientSecure.h>
+#include <WiFi.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include <DallasTemperature.h>
 
 // Pin definitions
 #define SENSOR_PIN 35 // Pin number for the soil moisture sensor
-
+int no_of_messages = 0;
 // AWS IoT configurations
-#define AWS_IOT_PUBLISH_TOPIC   "farm1/esp32/pub"
+#define AWS_IOT_PUBLISH_TOPIC   "farms/farm1/"
 // #define AWS_IOT_SUBSCRIBE_TOPIC "esp32/sub"
 
 // Define Temperature Sensor
@@ -27,11 +28,12 @@ PubSubClient client(net);
 void connectAWS()
 {
   // Connect to Wi-Fi
-  WiFi.mode(WIFI_STA);
+  // WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
   Serial.print("Connecting to Wi-Fi");
   while (WiFi.status() != WL_CONNECTED) {
+    WiFi.reconnect();
     Serial.print(".");
     delay(500);
   }
@@ -64,14 +66,27 @@ void connectAWS()
 void publishMessage(float soilMoisture, float temperature)
 {
   // Create a JSON document
-  StaticJsonDocument<200> doc;
-  doc["soil_moisture"] = soilMoisture;
+  StaticJsonDocument<1024> doc;
+  doc["moisture"] = soilMoisture;
   doc["temperature"] = temperature;
+  doc["device_id"] = "arn:aws:iot:us-east-1:404548260653:thing/ESP32_Farm1";
+  // doc["timestamp"] =  "16546";
   char jsonBuffer[512];
   serializeJson(doc, jsonBuffer); // serialize the JSON document to a string
 
   // Publish the message
-  client.publish(AWS_IOT_PUBLISH_TOPIC, jsonBuffer);
+  
+  boolean returned = client.publish(AWS_IOT_PUBLISH_TOPIC, jsonBuffer);
+  if (returned == 1){
+    Serial.print("\nDone\n");
+    no_of_messages = no_of_messages + 1;
+     Serial.println(String(client.state()));
+     Serial.println("\nnumber of sent messages : " + String(no_of_messages) );
+  }else{
+    Serial.print("\nFailed\n");
+    Serial.println(String(client.state()));
+  }
+  // Serial.print("returned "+ returned);
   Serial.println("Published message: " + String(jsonBuffer));
 }
 
@@ -97,6 +112,11 @@ void setup()
 
 void loop()
 {
+  // Check if the connection to AWS IoT is still active and reconnect if necessary
+  if (!client.connected()) {
+    connectAWS();
+  }
+
   // Read soil moisture
   float soilMoisture = analogRead(SENSOR_PIN);
   soilMoisture = map(soilMoisture, 0, 4095, 0, 100); // convert the raw reading to a percentage
