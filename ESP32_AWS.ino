@@ -4,13 +4,17 @@
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include <DallasTemperature.h>
+#include "time.h"
+
 
 // Pin definitions
 #define SENSOR_PIN 35 // Pin number for the soil moisture sensor
-int no_of_messages = 0;
 // AWS IoT configurations
 #define AWS_IOT_PUBLISH_TOPIC   "farms/farm1/"
 // #define AWS_IOT_SUBSCRIBE_TOPIC "esp32/sub"
+
+// set number of messages
+  int no_of_messages = 0;
 
 // Define Temperature Sensor
 // Ds18B20 Temperature sensor
@@ -25,15 +29,18 @@ DallasTemperature sensors(&oneWire);
 WiFiClientSecure net = WiFiClientSecure();
 PubSubClient client(net);
 
+// Network time Protocl Server
+const char* ntpServer = "pool.ntp.org";
+
 void connectAWS()
 {
   // Connect to Wi-Fi
   // WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
-  Serial.print("Connecting to Wi-Fi");
+  Serial.print("\nConnecting to Wi-Fi");
   while (WiFi.status() != WL_CONNECTED) {
-    WiFi.reconnect();
+    // WiFi.reconnect();
     Serial.print(".");
     delay(500);
   }
@@ -63,13 +70,26 @@ void connectAWS()
   }
 }
 
-void publishMessage(float soilMoisture, float temperature)
+// Function that gets current epoch time
+unsigned long getTime() {
+  time_t now;
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) {
+    // Serial.println("Failed to obtain time");
+    return(0);
+  }
+  time(&now);
+  return now;
+}
+
+void publishMessage(float soilMoisture, float temperature, int timestamp, int* no_of_messages)
 {
   // Create a JSON document
-  StaticJsonDocument<1024> doc;
+  StaticJsonDocument<512> doc;
   doc["moisture"] = soilMoisture;
   doc["temperature"] = temperature;
   doc["device_id"] = "arn:aws:iot:us-east-1:404548260653:thing/ESP32_Farm1";
+  doc["timestamp"] = timestamp;
   // doc["timestamp"] =  "16546";
   char jsonBuffer[512];
   serializeJson(doc, jsonBuffer); // serialize the JSON document to a string
@@ -78,16 +98,19 @@ void publishMessage(float soilMoisture, float temperature)
   
   boolean returned = client.publish(AWS_IOT_PUBLISH_TOPIC, jsonBuffer);
   if (returned == 1){
-    Serial.print("\nDone\n");
-    no_of_messages = no_of_messages + 1;
+    Serial.print("Sent Done\n");
+    *no_of_messages = *no_of_messages + 1;
+    
      Serial.println(String(client.state()));
-     Serial.println("\nnumber of sent messages : " + String(no_of_messages) );
+     Serial.println("number of sent messages : " + String(*no_of_messages) );
+     Serial.println("Published message: " + String(jsonBuffer));
+     Serial.println("-----------------------------------------------------------------------"); 
   }else{
     Serial.print("\nFailed\n");
     Serial.println(String(client.state()));
+    Serial.println("Message not sent");
   }
   // Serial.print("returned "+ returned);
-  Serial.println("Published message: " + String(jsonBuffer));
 }
 
 // void messageHandler(char* topic, byte* payload, unsigned int length)
@@ -106,16 +129,20 @@ void setup()
   Serial.begin(115200);
   sensors.begin();
 
+//Configure times   
+  configTime(0, 0, ntpServer);
+
   // Connect to AWS IoT
   connectAWS();
+
 }
 
 void loop()
 {
-  // Check if the connection to AWS IoT is still active and reconnect if necessary
-  if (!client.connected()) {
-    connectAWS();
-  }
+  // // Check if the connection to AWS IoT is still active and reconnect if necessary
+  // if (!client.connected()) {
+  //   connectAWS();
+  // }
 
   // Read soil moisture
   float soilMoisture = analogRead(SENSOR_PIN);
@@ -125,16 +152,24 @@ void loop()
   // sensors.requestTemperatures();
   float temperature = sensors.getTempCByIndex(0);
 
+  // get time
+  int timestamp = getTime();
+  Serial.println("\nCaptured Reading");
   Serial.print("Soil moisture: ");
   Serial.print(soilMoisture);
-  Serial.print("% Temperature: ");
+  Serial.print("%   Temperature: ");
   Serial.print(temperature);
   Serial.println("°C");
 
+    // Check if the connection to AWS IoT is still active and reconnect if necessary
+  if (!client.connected()) {
+    WiFi.disconnect();
+    connectAWS();
+  }
   // Publish the sensor readings to AWS IoT
-  publishMessage(soilMoisture, temperature);
+  publishMessage(soilMoisture, temperature, timestamp, &no_of_messages);
   client.loop();
 
   // Wait for some time before taking the next reading
-  delay(20000);
+  delay(5000);
 }
