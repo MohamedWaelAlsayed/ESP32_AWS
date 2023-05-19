@@ -8,7 +8,7 @@
 
 
 // Pin definitions
-#define SENSOR_PIN 35 // Pin number for the soil moisture sensor
+#define SENSOR_PIN 39 // Pin number for the soil moisture sensor
 // AWS IoT configurations
 #define AWS_IOT_PUBLISH_TOPIC   "farms/farm1/"
 // #define AWS_IOT_SUBSCRIBE_TOPIC "esp32/sub"
@@ -19,7 +19,7 @@
 // Define Temperature Sensor
 // Ds18B20 Temperature sensor
 // GPIO where the DS18B20 is connected to
-const int oneWireBus = 4;     
+const int oneWireBus = 13;     
 // Setup a oneWire instance to communicate with any OneWire devices
 OneWire oneWire(oneWireBus);
 
